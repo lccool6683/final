@@ -1,0 +1,5 @@
+[config]
+dstIP = "127.0.0.1"
+srcIP = "127.0.0.1"
+dstPort = 8505
+fileDir = ""
