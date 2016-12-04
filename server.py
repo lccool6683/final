@@ -1,5 +1,5 @@
 #server / attacker
-import ConfigParser, threading, hashlib
+import ConfigParser, threading, hashlib, sys
 #from Crypto import Random
 from Crypto.Cipher import AES
 
@@ -11,7 +11,7 @@ dstIP = configParser.get('config', 'dstIP')
 srcIP = configParser.get('config', 'srcIP')
 dstPort = configParser.get('config', 'dstPort')
 fileDir = configParser.get('config', 'fileDir')
-
+key = configParser.get('config', 'password')
 print dstIP
 
 
@@ -21,7 +21,6 @@ print dstIP
 
 #Using encryption code from backdoor assignment
 
-key = 'P@ssw0rd'
 IV = 16 * '\x00'#16 is block size
 
 #convert the password to a 32-byte key using the SHA-256 algorithm
