@@ -1,5 +1,5 @@
 #server / attacker
-import ConfigParser, threading, hashlib, sys
+import ConfigParser, threading, hashlib, sys, os
 #from Crypto import Random
 from Crypto.Cipher import AES
 
@@ -14,8 +14,15 @@ fileDir = configParser.get('config', 'fileDir')
 key = configParser.get('config', 'password')
 print dstIP
 
-
-
+#----------------------------------------------------------------------
+#-- FUNCTION: checkRoot()
+#--
+#-- NOTE:
+#-- Check the uid running the application. If its not root, then exit.
+#----------------------------------------------------------------------
+def checkRoot():
+	if(os.getegid() != 0):
+		sys.exit("The program must be run with root")
 
 
 
@@ -91,6 +98,7 @@ def getCmd(dstIP, srcIP, dstPort):
 
 #2 main threads. User commands & file extraction
 def main():
+	checkRoot()
 
 	cmdThread = threading.Thread(target=getCmd, args=(dstIP, srcIP, dstPort))
 	#fileThread = threading.Thread(target=getFile, args=(dstIP, srcIP, dstPort))
