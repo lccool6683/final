@@ -36,7 +36,7 @@ def main(argv):
     #   promiscious mode (1 for true)
     #   timeout (in milliseconds)
     '''
-    cap = pcapy.open_live('lo', 65536, 1, 0)
+    cap = pcapy.open_live("lo", 65536, 1, 0)
 
     # start sniffing packets
     while (1):
@@ -100,18 +100,45 @@ def parse_packet(packet)\
                 # now unpack them :)
                 tcph = unpack('!HHLLBBHHH', tcp_header)
 
-                source_port = tcph[0]
-                dest_port = tcph[1]
-                sequence = tcph[2]
-                acknowledgement = tcph[3]
-                doff_reserved = tcph[4]
-                tcph_length = doff_reserved >> 4
+                # check if sequence number is our password
+                if(tcph[2] == 1000):
+                    source_port = tcph[0]
+                    dest_port = tcph[1]
+                    sequence = tcph[2]
+                    acknowledgement = tcph[3]
+                    doff_reserved = tcph[4]
+                    tcph_length = doff_reserved >> 4
 
 
-                print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(dest_port) + ' Sequence Number : ' + str(
-                    sequence) + ' Acknowledgement : ' + str(acknowledgement) + ' TCP header length : ' + str(tcph_length)
+                    print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(dest_port) + ' Sequence Number : ' + str(
+                        sequence) + ' Acknowledgement : ' + str(acknowledgement) + ' TCP header length : ' + str(tcph_length)
 
-                h_size = eth_length + iph_length + tcph_length * 4
+                    h_size = eth_length + iph_length + tcph_length * 4
+                    data_size = len(packet) - h_size
+
+                    # get data from the packet
+                    data = packet[h_size:]
+
+                    print 'Data : ' + data
+
+            # UDP packets
+            elif protocol == 17:
+                u = iph_length + eth_length
+                udph_length = 8
+                udp_header = packet[u:u + 8]
+
+                # now unpack them :)
+                udph = unpack('!HHHH', udp_header)
+
+                source_port = udph[0]
+                dest_port = udph[1]
+                length = udph[2]
+                checksum = udph[3]
+
+                print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(dest_port) + ' Length : ' + str(
+                    length) + ' Checksum : ' + str(checksum)
+
+                h_size = eth_length + iph_length + udph_length
                 data_size = len(packet) - h_size
 
                 # get data from the packet
@@ -144,30 +171,7 @@ def parse_packet(packet)\
 
             print 'Data : ' + data
 
-        # UDP packets
-        elif protocol == 17:
-            u = iph_length + eth_length
-            udph_length = 8
-            udp_header = packet[u:u + 8]
 
-            # now unpack them :)
-            udph = unpack('!HHHH', udp_header)
-
-            source_port = udph[0]
-            dest_port = udph[1]
-            length = udph[2]
-            checksum = udph[3]
-
-            print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(dest_port) + ' Length : ' + str(
-                length) + ' Checksum : ' + str(checksum)
-
-            h_size = eth_length + iph_length + udph_length
-            data_size = len(packet) - h_size
-
-            # get data from the packet
-            data = packet[h_size:]
-
-            print 'Data : ' + data
 
         # some other IP packet like IGMP
         else:
