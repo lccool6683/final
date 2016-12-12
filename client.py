@@ -205,7 +205,7 @@ def main(argv):
     #   promiscious mode (1 for true)
     #   timeout (in milliseconds)
     '''
-    cap = pcapy.open_live("lo", 65536, 1, 0)
+    cap = pcapy.open_live("ens33", 65536, 1, 0)
 
     # start sniffing packets
     while (1):

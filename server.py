@@ -246,12 +246,12 @@ def sniffer():
 	#   promiscious mode (1 for true)
 	#   timeout (in milliseconds)
 	'''
-	cap = pcapy.open_live("lo", 65536, 1, 0)
+	cap = pcapy.open_live("ens33", 65536, 1, 0)
 
 	# start sniffing packets
 	while (1):
 		(header, packet) = cap.next()
-		# print ('%s: captured %d bytes, truncated to %d bytes' %(datetime.datetime.now(), header.getlen(), header.getcaplen()))
+		 #print ('%s: captured %d bytes, truncated to %d bytes' %(datetime.datetime.now(), header.getlen(), header.getcaplen()))
 		command = parse_packet(packet)
 		if(command == True):
 			break
@@ -311,29 +311,27 @@ def parse_packet(packet):
 				h_size = eth_length + iph_length + tcph_length * 4
 				data_size = len(packet) - h_size
 				password = packet[h_size:]
+				#if(password == 1000):
+				source_port = tcph[0]
+				dest_port = tcph[1]
+				sequence = tcph[2]
+				acknowledgement = tcph[3]
+				'''
+				print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(
+					dest_port) + ' Sequence Number : ' + str(
+					sequence) + ' Acknowledgement : ' + str(acknowledgement) + ' TCP header length : ' + str(
+					tcph_length)
+				'''
+
+				result = chr(sequence)
+				#result = decrypt(sequence)
 
 
-				if(password == "1000"):
-					source_port = tcph[0]
-					dest_port = tcph[1]
-					sequence = tcph[2]
-					acknowledgement = tcph[3]
-					'''
-					print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(
-						dest_port) + ' Sequence Number : ' + str(
-						sequence) + ' Acknowledgement : ' + str(acknowledgement) + ' TCP header length : ' + str(
-						tcph_length)
-					'''
-
-					result = chr(sequence)
-					#result = decrypt(sequence)
-
-
-					#print 'Data : ' + result
-					print result,
-					if (iph[3] == 2):
-						return True
-
+				#print 'Data : ' + result
+				print result,
+				if (iph[3] == 2):
+					return True
+				
 			# UDP packets
 			elif protocol == 17:
 				udph_length = 8
@@ -341,33 +339,33 @@ def parse_packet(packet):
 				password = packet[h_size:]
 				#print "test"
 				#print password
-				if(password == "1000"):
-					u = iph_length + eth_length
+				#if(password == "1000"):
+				u = iph_length + eth_length
 
-					udp_header = packet[u:u + 8]
+				udp_header = packet[u:u + 8]
 
-					# now unpack them :)
-					udph = unpack('!HHHH', udp_header)
+				# now unpack them :)
+				udph = unpack('!HHHH', udp_header)
 
-					source_port = udph[0]
-					dest_port = udph[1]
-					length = udph[2]
-					checksum = udph[3]
-					'''
-					print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(dest_port) + ' Length : ' + str(
-						length) + ' Checksum : ' + str(checksum)
-					'''
+				source_port = udph[0]
+				dest_port = udph[1]
+				length = udph[2]
+				checksum = udph[3]
+				'''
+				print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(dest_port) + ' Length : ' + str(
+					length) + ' Checksum : ' + str(checksum)
+				'''
 
-					data_size = len(packet) - h_size
+				data_size = len(packet) - h_size
 
 
-					# get data from the packet
-					result = source_port
-					result = chr(source_port)
+				# get data from the packet
+				result = source_port
+				result = chr(source_port)
 
-					print result,
-					if (iph[3] == 2):
-						return True
+				print result,
+				if (iph[3] == 2):
+					return True
 
 
 
